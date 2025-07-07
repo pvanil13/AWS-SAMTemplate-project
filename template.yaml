@@ -1,0 +1,149 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: SAM Template for API Gateway with Lambda Authorizer, DynamoDB & SNS
+
+Globals:
+  Function:
+    Timeout: 10
+    Runtime: python3.10
+    MemorySize: 128
+    Architectures: [x86_64]
+
+Resources:
+
+  ### DynamoDB Table
+  MyDynamoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: MyObjectsTable
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  ### SNS Topic
+  MySNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: MyObjectNotificationTopic
+
+  ### Lambda Authorizer
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AuthorizerFunction
+      Handler: auth.lambda_handler
+      CodeUri: auth/
+      Policies:
+        - AWSLambdaBasicExecutionRole
+
+  ### Lambda to Store Objects and Send SNS
+  StoreObjectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: StoreObjectFunction
+      Handler: store.lambda_handler
+      CodeUri: store/
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MyDynamoTable
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt MySNSTopic.TopicName
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref MyDynamoTable
+          TOPIC_ARN: !Ref MySNSTopic
+
+  ### Lambda to Get/List Objects
+  GetObjectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetObjectFunction
+      Handler: get.lambda_handler
+      CodeUri: get/
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - DynamoDBReadPolicy:
+            TableName: !Ref MyDynamoTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref MyDynamoTable
+
+  ### API Gateway
+  MyApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: MyObjectApi
+      StageName: Prod
+      Auth:
+        DefaultAuthorizer: LambdaTokenAuth
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          LambdaTokenAuth:
+            FunctionArn: !GetAtt AuthFunction.Arn
+            Identity:
+              Header: Authorization
+
+  ### API Gateway Routes
+  StoreObjectApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ApiStoreHandler
+      Handler: store.lambda_handler
+      CodeUri: store/
+      Events:
+        Store:
+          Type: Api
+          Properties:
+            Path: /store
+            Method: POST
+            RestApiId: !Ref MyApi
+            Auth:
+              Authorizer: LambdaTokenAuth
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MyDynamoTable
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt MySNSTopic.TopicName
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref MyDynamoTable
+          TOPIC_ARN: !Ref MySNSTopic
+
+  GetObjectApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ApiGetHandler
+      Handler: get.lambda_handler
+      CodeUri: get/
+      Events:
+        GetList:
+          Type: Api
+          Properties:
+            Path: /objects
+            Method: GET
+            RestApiId: !Ref MyApi
+            Auth:
+              Authorizer: LambdaTokenAuth
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - DynamoDBReadPolicy:
+            TableName: !Ref MyDynamoTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref MyDynamoTable
+
+Outputs:
+  ApiUrl:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${MyApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  TableName:
+    Value: !Ref MyDynamoTable
+  SNSTopic:
+    Value: !Ref MySNSTopic
+
