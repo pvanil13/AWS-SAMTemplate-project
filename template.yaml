@@ -5,7 +5,7 @@ Description: SAM Template for API Gateway with Lambda Authorizer, DynamoDB & SNS
 Globals:
   Function:
     Timeout: 10
-    Runtime: python3.10
+    Runtime: python3.12
     MemorySize: 128
     Architectures: [x86_64]
 
