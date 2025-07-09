@@ -16,7 +16,7 @@ phases:
       - sam package --s3-bucket $S3_BUCKET --output-template-file packaged.yaml
   post_build:
     commands:
-      - sam deploy --template-file packaged.yaml --stack-name sam-aws-project1 --capabilities CAPABILITY_IAM --region us-east-1 --s3-bucket $S3_BUCKET --no-confirm-changeset --no-fail-on-empty-changeset
+      - sam deploy --template-file packaged.yaml --stack-name sam-aws-project1 --capabilities CAPABILITY_IAM --region us-east-1 --s3-bucket $S3_BUCKET --no-resolve-s3 --no-confirm-changeset --no-fail-on-empty-changeset
 
 artifacts:
   files:
