@@ -6,9 +6,14 @@ phases:
       python: 3.12
     commands:
       - pip install aws-sam-cli
+  pre_build:
+    commands:
+      - sam validate
+      - sam build
   build:
     commands:
-      - sam build
+      - echo "S3_BUCKET=$S3_BUCKET"
+      - sam package --s3-bucket $S3_BUCKET --output-template-file packaged.yaml
   post_build:
     commands:
       - sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --stack-name sam-aws-project1 --capabilities CAPABILITY_IAM --region us-east-1
